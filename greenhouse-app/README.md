@@ -9,19 +9,37 @@
   ค่าใช้จ่ายเพิ่มเติมประจำเดือน (เช่น ค่าส่วนกลาง ค่าขยะ — ใส่ในบิลใหม่ทุกห้องอัตโนมัติ), วันครบกำหนดชำระ, ชื่อ/ที่อยู่/ช่องทางชำระเงินบนบิล
   บิลที่บันทึกแล้วจะเก็บอัตรา ณ วันที่บันทึกไว้ เปลี่ยนอัตราภายหลังไม่กระทบบิลเก่า
 
-## ใช้งาน
-
-ต้องใช้ Node.js 22.13 ขึ้นไป (ใช้ SQLite ที่มากับ Node)
+## รันในเครื่อง
 
 ```bash
 npm install
-npm run build
-npm start          # เปิด http://localhost:3001
+npm run db:migrate:local   # สร้างตารางใน D1 จำลองในเครื่อง (ครั้งแรกครั้งเดียว)
+npm run dev                # เปิด http://localhost:5173
 ```
 
-มือถือ/แท็บเล็ตที่อยู่ Wi‑Fi เดียวกัน เปิด `http://<IP เครื่องนี้>:3001`
-(ดู IP บน Mac: `ipconfig getifaddr en0`)
+`npm run dev` รัน Cloudflare Worker (API) และฐานข้อมูล D1 จำลองในเครื่องให้เลย ข้อมูลเก็บที่ `.wrangler/`
 
-พัฒนา: `npm run dev` (API :3001 + Vite :5173)
+## เอาขึ้น Cloudflare
 
-ข้อมูลเก็บที่ `data/greenhouse.db` — สำรองไฟล์นี้ไฟล์เดียวพอ
+ระบบใช้ **Cloudflare Workers** (หน้าเว็บ + API ใน [worker/index.ts](worker/index.ts)) และ **D1** (ฐานข้อมูล)
+
+```bash
+npx wrangler login                       # ล็อกอิน Cloudflare (ครั้งแรก)
+npx wrangler d1 create greenhouse        # สร้างฐานข้อมูล แล้วใส่ database_id ที่ได้ลงใน wrangler.jsonc
+npm run db:migrate:remote                # สร้างตารางบน Cloudflare
+npx wrangler secret put APP_PASSWORD     # ตั้งรหัสผ่านเข้าเว็บ (แนะนำมาก)
+npm run deploy                           # build + deploy → ได้ลิงก์ https://greenhouse.<account>.workers.dev
+```
+
+ย้ายข้อมูลเดิมจากเวอร์ชันก่อน (`data/greenhouse.db`) ขึ้น Cloudflare:
+
+```bash
+node scripts/export-sqlite.mjs > data/import.sql
+npx wrangler d1 execute greenhouse --remote --file data/import.sql
+```
+
+### รหัสผ่าน
+
+ถ้าตั้ง `APP_PASSWORD` ทุกหน้าจะถามรหัสผ่านก่อนเข้า (ช่องชื่อผู้ใช้ใส่อะไรก็ได้)
+ถ้าไม่ตั้ง ใครมีลิงก์ก็เข้าดูและแก้ข้อมูลผู้เช่าได้
+ทดสอบในเครื่องได้โดยสร้างไฟล์ `.dev.vars` ใส่ `APP_PASSWORD="..."`
